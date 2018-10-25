@@ -21,6 +21,8 @@
 #include <algorithm>
 #include <string.h>
 
+namespace mbed {
+
 // On disk structures, all entries are little endian
 MBED_PACKED(struct) mbr_entry {
     uint8_t status;
@@ -400,3 +402,5 @@ int MBRBlockDevice::get_partition_number() const
 {
     return _part;
 }
+
+} // namespace mbed
