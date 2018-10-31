@@ -681,7 +681,8 @@ bool AT_CellularNetwork::get_context()
     }
     _at.resp_stop();
     if (_cid == -1) { // no suitable context was found so create a new one
-        if (!set_new_context(cid_max + 1)) {
+        //if (!set_new_context(cid_max + 1)) {
+        if (!set_new_context(1)) {
             return false;
         }
     }
