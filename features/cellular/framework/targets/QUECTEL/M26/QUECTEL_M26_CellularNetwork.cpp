@@ -54,20 +54,5 @@ nsapi_error_t QUECTEL_M26_CellularNetwork::set_access_technology_impl(RadioAcces
 
 nsapi_error_t QUECTEL_M26_CellularNetwork::do_user_authentication()
 {
-    
-        _at.cmd_start("AT+QICSGP=");
-        _at.write_int(1); // mode: 0-CSD, 1-GPRS
-        _at.write_string(_apn);
-        if (_pwd && _uname) {
-            _at.write_string(_uname);
-            _at.write_string(_pwd);
-        }
-        _at.cmd_stop();
-        _at.resp_start();
-        _at.resp_stop();
-        if (_at.get_last_error() != NSAPI_ERROR_OK) {
-            return NSAPI_ERROR_AUTH_FAILURE;
-        }
-
     return NSAPI_ERROR_OK;
 }

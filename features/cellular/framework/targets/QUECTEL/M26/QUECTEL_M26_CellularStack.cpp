@@ -76,7 +76,6 @@ nsapi_error_t QUECTEL_M26_CellularStack::socket_stack_init()
 
     _at.lock();
     _at.cmd_start("AT+QIFGCNT=0");
-    //_at.write_int(0);
     _at.cmd_stop();
     _at.resp_start();
     _at.resp_stop();
@@ -93,7 +92,6 @@ nsapi_error_t QUECTEL_M26_CellularStack::socket_stack_init()
     /********************/
     if(tcpip_mode){
         _at.cmd_start("AT+QIMOD=0");
-        //_at.write_int(1);
         _at.cmd_stop();
         _at.resp_start();
         _at.resp_stop();
@@ -110,7 +108,6 @@ nsapi_error_t QUECTEL_M26_CellularStack::socket_stack_init()
 
     if(!mux_mode){
         _at.cmd_start("AT+QIMUX=1");
-        //_at.write_int(1);
         _at.cmd_stop();
         _at.resp_start();
         _at.resp_stop();
@@ -125,16 +122,14 @@ nsapi_error_t QUECTEL_M26_CellularStack::socket_stack_init()
     }
     _at.resp_stop();
 
-    if(!mux_mode){
+    if(cache_mode!=2){
         _at.cmd_start("AT+QINDI=2");
-        //_at.write_int(2);
         _at.cmd_stop();
         _at.resp_start();
         _at.resp_stop();
     }
 
     return _at.unlock_return_error();
-    //return NSAPI_ERROR_OK;
 }
 
 int QUECTEL_M26_CellularStack::get_max_socket_count()
@@ -161,27 +156,33 @@ nsapi_error_t QUECTEL_M26_CellularStack::socket_close_impl(int sock_id)
 void QUECTEL_M26_CellularStack::handle_open_socket_response(int &modem_connect_id, int &err)
 {
     char status[15];
-
-    _at.resp_start("ALREADY CONNECT");
+    printf("### handle_open_socket_response ### 1");
+    _at.resp_start();
     if(_at.info_resp()||_at.get_last_error())
     {
-        tr_info("### OPEN RESPONSE ###: ALREADY CONNECT true");
+        if(_at.info_resp()){
+            printf("### OPEN RESPONSE ###: ALREADY CONNECT true");
+            _at.read_string(status, sizeof(status));
+        }
+        else{
+            printf("### OPEN RESPONSE ###: ERROR");
+        }
         _at.resp_stop();
         err = 1;
         return;
     }
 
     _at.resp_stop();
-    // QIOPEN -> should be handled as URC?
+    printf("### handle_open_socket_response ### 2");
     _at.set_at_timeout(M26_CREATE_SOCKET_TIMEOUT);
     _at.resp_start();
     modem_connect_id = _at.read_int();
-    //int len = _at.read_string(status, sizeof(status));
+    int len = _at.read_string(status, sizeof(status));
     _at.resp_stop();
     _at.restore_at_timeout();
     err = (_at.get_last_error() != NSAPI_ERROR_OK)?1:0;
 
-    //tr_info("##### %s, %d, %d , %d\n",status, len, err,sizeof(status));
+    printf("###handle_open_socket_response ### 3: %s, %d, %d , %d\n",status, len, err, sizeof(status));
 }
 nsapi_error_t QUECTEL_M26_CellularStack::create_socket_impl(CellularSocket *socket)
 {
@@ -207,7 +208,7 @@ nsapi_error_t QUECTEL_M26_CellularStack::create_socket_impl(CellularSocket *sock
 
         handle_open_socket_response(modem_connect_id, err);
 
-        if ((_at.get_last_error() == NSAPI_ERROR_OK) && err) {
+        if ((_at.get_last_error() != NSAPI_ERROR_OK) || err) {
             _at.cmd_start("AT+QICLOSE=");
             _at.write_int(modem_connect_id);
             _at.cmd_stop();
@@ -253,6 +254,8 @@ nsapi_size_or_error_t QUECTEL_M26_CellularStack::socket_sendto_impl(CellularSock
     int sent_acked = 0;
     int sent_nacked = 0;
 
+    int sent_len_before = 0;
+    int sent_len_after = 0;
 
     if((size==0)||(size > 1460 )){
         return NSAPI_ERROR_PARAMETER;
@@ -266,7 +269,20 @@ nsapi_size_or_error_t QUECTEL_M26_CellularStack::socket_sendto_impl(CellularSock
             return NSAPI_ERROR_NO_SOCKET;
     }
 
-    // Send
+    tr_info("#IN#### socket_sendto_impl send size  = %d ##########################\n",size);
+
+    _at.set_debug(false);
+
+    _at.cmd_start("AT+QISACK=");
+    _at.write_int(socket->id);
+    _at.cmd_stop();
+
+    _at.resp_start("+QISACK:");
+    sent_len_before = _at.read_int();
+    sent_acked = _at.read_int();
+    sent_nacked = _at.read_int();
+    _at.resp_stop();
+
     _at.cmd_start("AT+QISEND=");
     _at.write_int(socket->id);
     _at.write_int(size);
@@ -287,11 +303,17 @@ nsapi_size_or_error_t QUECTEL_M26_CellularStack::socket_sendto_impl(CellularSock
     sent_nacked = _at.read_int();
     _at.resp_stop();
 
+    _at.set_debug(true);
     if (_at.get_last_error() == NSAPI_ERROR_OK) {
+        tr_info("#OUT#### socket_sendto_impl: %d %d %d ##########################\n",sent_len_after,sent_acked,sent_nacked);
+        if(sent_acked == size) return size;
+        sent_len = sent_len_after - sent_len_before;
         return sent_len;
     }
 
-    return _at.get_last_error();
+    nsapi_error_t error = _at.get_last_error();
+    tr_info("#OUT#### socket_sendto_impl error  = %d ##########################\n",error);
+    return error;
 }
 
 nsapi_size_or_error_t QUECTEL_M26_CellularStack::socket_recvfrom_impl(CellularSocket *socket, SocketAddress *address,
@@ -301,7 +323,9 @@ nsapi_size_or_error_t QUECTEL_M26_CellularStack::socket_recvfrom_impl(CellularSo
     int port;
     char type[8];
     char ip_address[NSAPI_IP_SIZE + 1];
-    tr_info("#IN#### socket_recvfrom_impl ##########################\n");
+    tr_info("#IN#### socket_recvfrom_impl read size  = %d ##########################\n",size);
+    _at.set_debug(false);
+    _at.set_at_timeout(4000);
 
     _at.cmd_start("AT+QIRD=");
     _at.write_int(0);//at+qifgcnt 0-1
@@ -320,15 +344,28 @@ nsapi_size_or_error_t QUECTEL_M26_CellularStack::socket_recvfrom_impl(CellularSo
         recv_len = _at.read_int();
         if (recv_len > 0) {
             _at.read_bytes((uint8_t *)buffer, recv_len);
-            for(int i=0;i<recv_len;i++){tr_info("##### [%c]",((char *)buffer)[i]);}
         }
     }
     _at.resp_stop();
-    tr_info("##### recv_len = %d,%d,%s,%s: %s\n",recv_len,port,ip_address,type,buffer);
+    _at.set_debug(true);
+    _at.restore_at_timeout();
 
+    if (recv_len > 0) {
+        //_at.read_bytes((uint8_t *)buffer, recv_len);
+        /*
+        printf("\n==============================================================================\n");
+        for(int i=0;i<recv_len;i++){
+            printf("(%x)",((unsigned char *)buffer)[i]);
+            if(i%16==15)printf("\n");
+        }
+        */
+        //printf("\n-----------------------------------------------------------------------------\n");
+        tr_info("#OUT#### socket_recvfrom_impl: recv_len = %d,%d,%s,%s\n",recv_len,port,ip_address,type);
+        //printf("\n==============================================================================\n");
+    }
 
     if (!recv_len || ( _at.get_last_error()!= NSAPI_ERROR_OK)) {
-        tr_info("#OUT#### socket_recvfrom_impl recv_len = %d\n",recv_len);
+        //tr_info("#OUT#### socket_recvfrom_impl recv_len = %d\n",recv_len);
         return NSAPI_ERROR_WOULD_BLOCK;
     }
 
@@ -337,6 +374,6 @@ nsapi_size_or_error_t QUECTEL_M26_CellularStack::socket_recvfrom_impl(CellularSo
         address->set_port(port);
     }
 
-    tr_info("#OUT#### socket_recvfrom_impl recv_len = %d\n",recv_len);
+    //tr_info("#OUT#### socket_recvfrom_impl recv_len = %d\n",recv_len);
     return recv_len;
 }

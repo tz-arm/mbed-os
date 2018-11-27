@@ -38,5 +38,21 @@ nsapi_error_t QUECTEL_M26_CellularPower::on()
 nsapi_error_t QUECTEL_M26_CellularPower::off()
 {
 
-    return NSAPI_ERROR_OK;
+    _at.lock();
+
+    /*Normal Power Off*/
+    /*
+    _at.cmd_start("AT+QPOWD=1");
+    _at.cmd_stop();
+    _at.resp_start("NORMAL POWER DOWN");
+    _at.resp_stop();
+    */
+
+    /*Fast Power Off*/
+    _at.cmd_start("AT+QPOWD=1");
+    _at.cmd_stop();
+    _at.resp_start();
+    _at.resp_stop();
+
+    return _at.unlock_return_error();
 }
