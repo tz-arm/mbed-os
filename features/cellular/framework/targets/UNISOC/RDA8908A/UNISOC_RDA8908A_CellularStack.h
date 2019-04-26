@@ -60,7 +60,7 @@ protected: // AT_CellularStack
 
 private:
     // URC handlers
-    void urc_nsonmi();
+    void urc_receive();
 };
 } // namespace mbed
 #endif /* UNISOC_RDA8908A_CELLULARSTACK_H_ */

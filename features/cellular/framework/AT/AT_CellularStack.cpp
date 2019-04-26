@@ -342,9 +342,9 @@ nsapi_size_or_error_t AT_CellularStack::socket_recvfrom(nsapi_socket_t handle, S
 
     if (ret_val >= 0) {
         if (addr) {
-            tr_info("Socket %d recv %d bytes from %s port %d", find_socket_index(socket), ret_val, addr->get_ip_address(), addr->get_port());
+            //tr_info("Socket %d recv %d bytes from %s port %d", find_socket_index(socket), ret_val, addr->get_ip_address(), addr->get_port());
         } else {
-            tr_info("Socket %d recv %d bytes", find_socket_index(socket), ret_val);
+            //tr_info("Socket %d recv %d bytes", find_socket_index(socket), ret_val);
         }
     } else if (ret_val != NSAPI_ERROR_WOULD_BLOCK) {
         tr_error("Socket %d recv error %d", find_socket_index(socket), ret_val);

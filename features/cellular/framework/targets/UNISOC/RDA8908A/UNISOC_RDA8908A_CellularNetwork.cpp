@@ -28,11 +28,6 @@ UNISOC_RDA8908A_CellularNetwork::~UNISOC_RDA8908A_CellularNetwork()
 {
 }
 
-AT_CellularNetwork::RegistrationMode UNISOC_RDA8908A_CellularNetwork::has_registration(RegistrationType reg_tech)
-{
-    return (reg_tech == C_EREG) ? RegistrationModeLAC : RegistrationModeDisable;
-}
-
 nsapi_error_t UNISOC_RDA8908A_CellularNetwork::set_access_technology_impl(RadioAccessTechnology opRat)
 {
     if (opRat != RAT_NB1) {

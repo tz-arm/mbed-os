@@ -23,7 +23,7 @@ namespace mbed {
 
 class UNISOC_RDA8908A_CellularContext: public AT_CellularContext {
 public:
-    UNISOC_RDA8908A_CellularContext(ATHandler &at, CellularDevice *device, const char *apn);
+    UNISOC_RDA8908A_CellularContext(ATHandler &at, CellularDevice *device, const char *apn, bool cp_req = false, bool nonip_req = false);
     virtual ~UNISOC_RDA8908A_CellularContext();
 
 protected:

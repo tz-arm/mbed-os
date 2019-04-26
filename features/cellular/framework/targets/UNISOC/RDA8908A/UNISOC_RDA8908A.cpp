@@ -16,8 +16,6 @@
  */
 
 #include "UNISOC_RDA8908A_CellularNetwork.h"
-#include "UNISOC_RDA8908A_CellularPower.h"
-#include "UNISOC_RDA8908A_CellularSIM.h"
 #include "UNISOC_RDA8908A_CellularContext.h"
 #include "UNISOC_RDA8908A.h"
 
@@ -31,18 +29,21 @@
 using namespace events;
 using namespace mbed;
 
-static const AT_CellularBase::SupportedFeature unsupported_features[] =  {
-    AT_CellularBase::AT_CGAUTH, 
-    AT_CellularBase::SUPPORTED_FEATURE_END_MARK
+static const intptr_t cellular_properties[AT_CellularBase::PROPERTY_MAX] = {
+    AT_CellularNetwork::RegistrationModeLAC,    // C_EREG
+    AT_CellularNetwork::RegistrationModeDisable,// C_GREG
+    AT_CellularNetwork::RegistrationModeDisable,// C_REG
+    1,  // AT_CGSN_WITH_TYPE
+    1,  // AT_CGDATA
+    0,  // AT_CGAUTH
+    1,  // PROPERTY_IPV4_STACK
+    0,  // PROPERTY_IPV6_STACK
+    0,  // PROPERTY_IPV4V6_STACK
 };
 
 UNISOC_RDA8908A::UNISOC_RDA8908A(FileHandle *fh) : AT_CellularDevice(fh)
 {
-    AT_CellularBase::set_unsupported_features(unsupported_features);
-}
-
-UNISOC_RDA8908A::~UNISOC_RDA8908A()
-{
+    AT_CellularBase::set_cellular_properties(cellular_properties);
 }
 
 AT_CellularNetwork *UNISOC_RDA8908A::open_network_impl(ATHandler &at)
@@ -50,17 +51,22 @@ AT_CellularNetwork *UNISOC_RDA8908A::open_network_impl(ATHandler &at)
     return new UNISOC_RDA8908A_CellularNetwork(at);
 }
 
-AT_CellularPower *UNISOC_RDA8908A::open_power_impl(ATHandler &at)
+AT_CellularContext *UNISOC_RDA8908A::create_context_impl(ATHandler &at, const char *apn, bool cp_req, bool nonip_req)
 {
-    return new UNISOC_RDA8908A_CellularPower(at);
+    return new UNISOC_RDA8908A_CellularContext(at, this, apn, cp_req, nonip_req);
 }
 
-AT_CellularSIM *UNISOC_RDA8908A::open_sim_impl(ATHandler &at)
-{
-    return new UNISOC_RDA8908A_CellularSIM(at);
-}
 
-AT_CellularContext *UNISOC_RDA8908A::create_context_impl(ATHandler &at, const char *apn)
+#if MBED_CONF_UNISOC_RDA8908A_PROVIDE_DEFAULT
+#include "UARTSerial.h"
+CellularDevice *CellularDevice::get_default_instance()
 {
-    return new UNISOC_RDA8908A_CellularContext(at, this, apn);
+    static UARTSerial serial(MBED_CONF_UNISOC_RDA8908A_TX, MBED_CONF_UNISOC_RDA8908A_RX, MBED_CONF_UNISOC_RDA8908A_BAUDRATE);
+#if defined (MBED_CONF_UNISOC_RDA8908A_RTS) && defined(MBED_CONF_UNISOC_RDA8908A_CTS)
+    tr_debug("UNISOC_RDA8908A flow control: RTS %d CTS %d", MBED_CONF_UNISOC_RDA8908A_RTS, MBED_CONF_UNISOC_RDA8908A_CTS);
+    serial.set_flow_control(SerialBase::RTSCTS, MBED_CONF_UNISOC_RDA8908A_RTS, MBED_CONF_UNISOC_RDA8908A_CTS);
+#endif
+    static UNISOC_RDA8908A device(&serial);
+    return &device;
 }
+#endif
