@@ -201,6 +201,8 @@ bool AT_CellularContext::is_connected()
 
 NetworkStack *AT_CellularContext::get_stack()
 {
+    tr_info("get_stack1 %d", _cid);
+
 #if NSAPI_PPP_AVAILABLE
     // use lwIP/PPP if modem does not have IP stack
     if (!_stack) {
@@ -404,7 +406,7 @@ bool AT_CellularContext::get_context()
         memcpy(_found_apn, apn, apn_len + 1);
     }
 
-    tr_info("Found PDP context %d", _cid);
+    tr_info("Found PDP1 context %d", _cid);
 
     return true;
 }
@@ -504,7 +506,7 @@ nsapi_error_t AT_CellularContext::activate_context()
     // do check for stack to validate that we have support for stack
     if (!get_stack()) {
         _at.unlock();
-        tr_error("No cellular stack!");
+        tr_error("1No cellular stack!");
         return NSAPI_ERROR_UNSUPPORTED;
     }
 

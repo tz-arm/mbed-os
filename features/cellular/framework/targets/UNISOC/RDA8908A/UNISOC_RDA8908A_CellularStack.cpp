@@ -22,9 +22,10 @@
 using namespace mbed;
 using namespace mbed_cellular_util;
 
+
 UNISOC_RDA8908A_CellularStack::UNISOC_RDA8908A_CellularStack(ATHandler &atHandler, int cid, nsapi_ip_stack_t stack_type) : AT_CellularStack(atHandler, cid, stack_type)
 {
-    _at.set_urc_handler("+RECEIVE:", mbed::Callback<void()>(this, &UNISOC_RDA8908A_CellularStack::urc_nsonmi));
+    _at.set_urc_handler("+CIPRXGET:0", mbed::Callback<void()>(this, &UNISOC_RDA8908A_CellularStack::urc_receive));
 }
 
 UNISOC_RDA8908A_CellularStack::~UNISOC_RDA8908A_CellularStack()
@@ -45,18 +46,18 @@ nsapi_error_t UNISOC_RDA8908A_CellularStack::socket_accept(void *server, void **
 }
 
 
-void UNISOC_RDA8908A_CellularStack::urc_nsonmi()
+void UNISOC_RDA8908A_CellularStack::urc_receive()
 {
-    _at.lock();
-    int sock_id = _at.read_int();
-    (void) _at.skip_param(); /*<len>*/
-    (void) _at.skip_param(); /*<tlen>*/
-    (void) _at.skip_param(); /*<tlen>*/
-    _at.unlock();
+    //_at.lock();
+    //int sock_id = _at.read_int();
+    //(void) _at.skip_param(); /*<len>*/
+    //(void) _at.skip_param(); /*<tlen>*/
+    //(void) _at.skip_param(); /*<tlen>*/
+    //_at.unlock();
 
     for (int i = 0; i < get_max_socket_count(); i++) {
         CellularSocket *sock = _socket[i];
-        if (sock && sock->id == sock_id) {
+        if (sock && sock->id == 0) {
             if (sock->_cb) {
                 sock->_cb(sock->_data);
             }
@@ -70,6 +71,9 @@ nsapi_error_t UNISOC_RDA8908A_CellularStack::socket_stack_init()
     int set_mux = 0;
     int set_showip = 0;
     int set_rxmode = 0;
+    int set_cscon = 0;
+    int set_npsmr = 0;
+    int set_cipqs = 0;
     //tr_debug("UNISOC_RDA8908A_CellularStack:%s:%u: START ", __FUNCTION__, __LINE__);
 
     _at.lock();
@@ -85,6 +89,23 @@ nsapi_error_t UNISOC_RDA8908A_CellularStack::socket_stack_init()
         _at.write_int(1); /* 0-Disable, 1-Enable */
         _at.cmd_stop_read_resp();
     }
+
+#if 0 //Not support in old version
+    //////////////////////////////////////
+    _at.cmd_start("AT+NPSMR?");
+    _at.cmd_stop();
+    _at.resp_start("+NPSMR:");
+    if (_at.info_resp()) {
+        set_npsmr = _at.read_int();
+        _at.skip_param();
+    }
+    _at.resp_stop();
+    if(set_npsmr){
+        _at.cmd_start("AT+NPSMR=");
+        _at.write_int(0); 
+        _at.cmd_stop_read_resp();
+    }
+#endif
 
 #if 1
     /* AT+CSTT Start Task And Set APN, User ID, Password */
@@ -131,18 +152,36 @@ nsapi_error_t UNISOC_RDA8908A_CellularStack::socket_stack_init()
         _at.cmd_stop_read_resp();
     }
 
+    //////////////////////////////////////
+    _at.cmd_start("AT+CSCON?");
+    _at.cmd_stop();
+    _at.resp_start("+CSCON:");
+    if (_at.info_resp()) {
+        set_cscon = _at.read_int();
+        _at.skip_param();
+    }
+    _at.resp_stop();
+    if(set_cscon){
+        _at.cmd_start("AT+CSCON=");
+        _at.write_int(0); 
+        _at.cmd_stop_read_resp();
+    }
 
-
-/*
+#if 0
     _at.cmd_start("AT+CIPQSEND?");
     _at.cmd_stop();
     _at.resp_start("+CIPQSEND:");
     if (_at.info_resp()) {
-        tmp = _at.read_int();
+        set_cipqs = _at.read_int();
     }
     _at.resp_stop();
+    if(!set_cipqs){
+        _at.cmd_start("AT+CIPQSEND=");
+        _at.write_int(1); 
+        _at.cmd_stop_read_resp();
+    }
     tr_debug("UNISOC_RDA8908A_CellularStack:%s:%u: CIPQSEND = %d ", __FUNCTION__, __LINE__,tmp);
-*/
+#endif
 
     //tr_debug("UNISOC_RDA8908A_CellularStack:%s:%u: END ", __FUNCTION__, __LINE__);
     return _at.unlock_return_error();
@@ -174,20 +213,29 @@ nsapi_error_t UNISOC_RDA8908A_CellularStack::socket_close_impl(int sock_id)
 
 void UNISOC_RDA8908A_CellularStack::handle_open_socket_response(int &modem_connect_id, int &err)
 {
-    char status[15];
+    char status[20];
+    nsapi_error_t ret_val = NSAPI_ERROR_OK;
     tr_debug("UNISOC_RDA8908A_CellularStack:%s:%u: START", __FUNCTION__, __LINE__);
 
+    _at.set_at_timeout(5000);
     _at.resp_start();
     if (_at.info_resp()) {
-        tr_debug("UNISOC_RDA8908A_CellularStack:%s:%u: END [%s, %d]", __FUNCTION__, __LINE__, status, err);
         modem_connect_id = _at.read_int();
         _at.read_string(status, sizeof(status));
-        if (!strcmp(status, "CONNECT OK"))
-            err = 0;
-        else if(!strcmp(status, "ALREADY CONNECT"))
-            err = 1;   
     }
-    tr_debug("UNISOC_RDA8908A_CellularStack:%s:%u: END [%s, %d]", __FUNCTION__, __LINE__, status, err);
+    tr_debug("UNISOC_RDA8908A_CellularStack:%s:%u: END [%s, %d, %d]", __FUNCTION__, __LINE__, status, err, ret_val);
+    _at.set_stop_tag("\r\n");
+    _at.resp_stop();
+    _at.restore_at_timeout();
+
+    if (!strcmp(status, "CONNECT OK"))
+        err = 0;
+    else if(!strcmp(status, "ALREADY CONNECT"))
+        err = 1;   
+
+    ret_val = _at.get_last_error();
+
+    tr_debug("UNISOC_RDA8908A_CellularStack:%s:%u: END [%s, %d, %d]", __FUNCTION__, __LINE__, status, err, ret_val);
 }
 
 nsapi_error_t UNISOC_RDA8908A_CellularStack::create_socket_impl(CellularSocket *socket)
@@ -262,13 +310,15 @@ nsapi_size_or_error_t UNISOC_RDA8908A_CellularStack::socket_sendto_impl(Cellular
                                                                      const void *data, nsapi_size_t size)
 {
     int sent_len = 0;
+    int send_socket = 0;
 
-    tr_debug("UNISOC_RDA8908A_CellularStack:%s:%u:[%d-%d]", __FUNCTION__, __LINE__,size);
+    tr_debug("UNISOC_RDA8908A_CellularStack:%s:%u: START [%d-%d]", __FUNCTION__, __LINE__,size,sent_len);
 
     if ((!socket)||(!data)||(size == 0)) {
         tr_error("UNISOC_RDA8908A_CellularStack:%s:%u:[NSAPI_ERROR_PARAMETER]", __FUNCTION__, __LINE__);
         return NSAPI_ERROR_PARAMETER;
     }
+    //_at.set_debug(false);
 
     if ((socket->proto == NSAPI_UDP)&&(!socket->created)) {
         socket->remoteAddress = address;
@@ -280,6 +330,17 @@ nsapi_size_or_error_t UNISOC_RDA8908A_CellularStack::socket_sendto_impl(Cellular
         }
     }
 
+#if 1
+    _at.cmd_start("AT+CIPSEND=");
+    _at.write_int(socket->id);
+    _at.write_int(size);
+    _at.cmd_stop();
+    _at.resp_start(">");
+    _at.write_bytes((uint8_t *)data, size);
+    _at.resp_start();
+    _at.set_stop_tag("SEND OK");
+    _at.resp_stop();
+#else
     _at.cmd_start("AT+CIPSEND=");
     _at.write_int(socket->id);
     _at.write_int(size);
@@ -287,14 +348,40 @@ nsapi_size_or_error_t UNISOC_RDA8908A_CellularStack::socket_sendto_impl(Cellular
     _at.resp_start(">");
     if (_at.info_resp()) {
         _at.write_bytes((uint8_t *)data, size);
+        if(_at.resp_start("DATA ACCEPT:")){
+            send_socket = _at.read_int();
+            sent_len = _at.read_int();
+        }
     }
+    _at.resp_start(">");
+    _at.write_bytes((uint8_t *)data, size);
+    _at.resp_start();
+    _at.set_stop_tag("\r\n");
     _at.resp_stop();
+
+    // Get the sent count after sending
+    _at.cmd_start("AT+QISEND=");
+    _at.write_int(socket->id);
+    _at.write_int(0);
+    _at.cmd_stop();
+
+    _at.resp_start("+QISEND:");
+    sent_len_after = _at.read_int();
+    _at.resp_stop();
+
+    tr_info("UNISOC_RDA8908A_CellularStack:%s:%u: END [%d-%d]", __FUNCTION__, __LINE__,size,sent_len);
+    //_at.resp_stop();
+    tr_info("UNISOC_RDA8908A_CellularStack:%s:%u: END [%d-%d]", __FUNCTION__, __LINE__,size,sent_len);
+
+#endif
+    //_at.set_debug(true);
 
     if (_at.get_last_error() != NSAPI_ERROR_OK) {
         tr_error("UNISOC_RDA8908A_CellularStack:%s:%u:[NSAPI_ERROR_DEVICE_ERROR]", __FUNCTION__, __LINE__);
         return NSAPI_ERROR_DEVICE_ERROR;
     }
 
+    tr_debug("UNISOC_RDA8908A_CellularStack:%s:%u: END [%d-%d]", __FUNCTION__, __LINE__,size,sent_len);
     return size;
 }
 
@@ -303,36 +390,59 @@ nsapi_size_or_error_t UNISOC_RDA8908A_CellularStack::socket_recvfrom_impl(Cellul
 {
     nsapi_size_or_error_t recv_len = 0;
     int port;
+    int mode = 0;
     char ip_address[NSAPI_IP_SIZE];
 
-    tr_debug("UNISOC_RDA8908A_CellularStack:%s:%u:[%d-%d]", __FUNCTION__, __LINE__,size);
+    tr_debug("UNISOC_RDA8908A_CellularStack:%s:%u: START [%d]", __FUNCTION__, __LINE__,size);
 
     if ((socket == NULL)||(buffer==NULL)||(size==0)) {
         tr_error("UNISOC_RDA8908A_CellularStack:%s:%u:[NSAPI_ERROR_PARAMETER]", __FUNCTION__, __LINE__);
         return NSAPI_ERROR_PARAMETER;
     }
+    //_at.set_debug(false);
 
     _at.cmd_start("AT+CIPRXGET=");
     _at.write_int(2);
     _at.write_int(socket->id);
     _at.write_int(size);
     _at.cmd_stop();
-
     _at.resp_start("+CIPRXGET:");
     if (_at.info_resp()) {
-        _at.skip_param();
-        _at.skip_param();
-        _at.skip_param();
-        recv_len = _at.read_int();
-        if (recv_len > 0) {
-            _at.read_string(ip_address, sizeof(ip_address));
-            port = _at.read_int();
-            _at.read_bytes((uint8_t *)buffer, recv_len);
+        mode = _at.read_int();
+        if(mode){
+            _at.skip_param();
+            _at.skip_param();
+            recv_len = _at.read_int();
+            _at.skip_param();
+            if (recv_len > 0) {
+                _at.read_string(ip_address, sizeof(ip_address));
+                port = _at.read_int();
+                _at.read_bytes((uint8_t *)buffer, recv_len);
+            }
+            _at.resp_stop();
         }
     }
-    _at.resp_stop();
 
-    if (!recv_len || (_at.get_last_error() != NSAPI_ERROR_OK)) {
+    if(!mode){
+        tr_debug("UNISOC_RDA8908A_CellularStack:%s:%u: START [%d]", __FUNCTION__, __LINE__,size);
+        _at.resp_start("+CIPRXGET:");
+        mode = _at.read_int();
+        if(mode){
+            _at.skip_param();
+            _at.skip_param();
+            recv_len = _at.read_int();
+            if (recv_len > 0) {
+                _at.read_string(ip_address, sizeof(ip_address));
+                port = _at.read_int();
+                _at.read_bytes((uint8_t *)buffer, recv_len);
+            }
+            _at.resp_stop();
+        }
+    }
+    
+    //_at.set_debug(true);
+    if (!recv_len || (_at.get_last_error() != NSAPI_ERROR_OK)||!mode) {
+        tr_info("UNISOC_RDA8908A_CellularStack:%s:%u: BLOCK [%d]", __FUNCTION__, __LINE__,recv_len);
         return NSAPI_ERROR_WOULD_BLOCK;
     }
 
@@ -341,5 +451,6 @@ nsapi_size_or_error_t UNISOC_RDA8908A_CellularStack::socket_recvfrom_impl(Cellul
         address->set_port(port);
     }
 
+    tr_debug("UNISOC_RDA8908A_CellularStack:%s:%u: END [%d, %d,%s,%d]", __FUNCTION__, __LINE__,mode, size,ip_address,port);
     return recv_len;
 }
