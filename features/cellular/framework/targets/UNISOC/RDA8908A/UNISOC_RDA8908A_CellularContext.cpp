@@ -34,19 +34,17 @@ UNISOC_RDA8908A_CellularContext::~UNISOC_RDA8908A_CellularContext()
 #if !NSAPI_PPP_AVAILABLE
 NetworkStack *UNISOC_RDA8908A_CellularContext::get_stack()
 {
-    tr_error("UNISOC_RDA8908A_CellularContext1 1No cellular stack!");
-
-    tr_info("UNISOC_RDA8908A_CellularContext1 %d",_stack);
+    tr_info("UNISOC_RDA8908A_CellularContext Start: %d",_stack);
     if (_pdp_type == NON_IP_PDP_TYPE || _cp_in_use) {
         tr_error("Requesting stack for NON-IP context! Should request control plane netif: get_cp_netif()");
         return NULL;
     }
 
     if (!_stack) {
-        tr_info("UNISOC_RDA8908A_CellularContext2 %d",_stack);
         _stack = new UNISOC_RDA8908A_CellularStack(_at, _cid, (nsapi_ip_stack_t)_pdp_type);
     }
-    tr_info("UNISOC_RDA8908A_CellularContext3 %d",_stack);
+
+    tr_info("UNISOC_RDA8908A_CellularContext End: %d",_stack);
     return _stack;
 }
 #endif // #if !NSAPI_PPP_AVAILABLE
