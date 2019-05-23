@@ -19,7 +19,7 @@
         },
         "baudrate" : {
             "help": "Serial connection baud rate",
-            "value": 9600
+            "value": 57600
         },
         "provide-default": {
             "help": "Provide as default CellularDevice [true/false]",
