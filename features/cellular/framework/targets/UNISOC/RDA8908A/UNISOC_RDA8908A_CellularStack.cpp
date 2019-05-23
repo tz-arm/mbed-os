@@ -26,6 +26,7 @@ using namespace mbed_cellular_util;
 UNISOC_RDA8908A_CellularStack::UNISOC_RDA8908A_CellularStack(ATHandler &atHandler, int cid, nsapi_ip_stack_t stack_type) : AT_CellularStack(atHandler, cid, stack_type)
 {
     _at.set_urc_handler("+CIPRXGET:0", mbed::Callback<void()>(this, &UNISOC_RDA8908A_CellularStack::urc_rxget));
+    _at.set_urc_handler("+CSCON:", mbed::Callback<void()>(this, &UNISOC_RDA8908A_CellularStack::urc_cscon));
 }
 
 UNISOC_RDA8908A_CellularStack::~UNISOC_RDA8908A_CellularStack()
@@ -47,7 +48,6 @@ nsapi_error_t UNISOC_RDA8908A_CellularStack::socket_accept(void *server, void **
 
 void UNISOC_RDA8908A_CellularStack::urc_rxget()
 {
-
     for (int i = 0; i < get_max_socket_count(); i++) {
         CellularSocket *sock = _socket[i];
         if (sock && sock->id == 0) {
@@ -59,113 +59,45 @@ void UNISOC_RDA8908A_CellularStack::urc_rxget()
     }
 }
 
-nsapi_error_t UNISOC_RDA8908A_CellularStack::socket_stack_init()
+void UNISOC_RDA8908A_CellularStack::urc_cscon()
 {
-    int set_mux = 0;
-    int set_showip = 0;
-    int set_rxmode = 0;
-    int set_cscon = 0;
-    int set_npsmr = 0;
-    int set_cipqs = 0;
-    tr_debug("UNISOC_RDA8908A_CellularStack:%s:%u: START ", __FUNCTION__, __LINE__);
+    int cscon_mode = 0;
+    int cscon_status = 0;
+    int cscon_access = 0;
 
     _at.lock();
-    _at.cmd_start("AT+CIPMUX?");
-    _at.cmd_stop();
-    _at.resp_start("+CIPMUX:");
-    if (_at.info_resp()) {
-        set_mux = _at.read_int();
+    cscon_mode = _at.read_int();
+    if(cscon_mode){
+        cscon_status = _at.read_int();
+        cscon_access = _at.read_int();
     }
-    _at.resp_stop();
-    if(!set_mux){
-        _at.cmd_start("AT+CIPMUX=");
-        _at.write_int(1); /* 0-Disable, 1-Enable */
-        _at.cmd_stop_read_resp();
-    }
+    _at.unlock();
+    tr_debug("UNISOC_RDA8908A_CellularStack::urc_cscon:%d,%d,%d",cscon_mode,cscon_status,cscon_access);  
+}
 
-#if 0 //Not support in old version
-    //////////////////////////////////////
-    _at.cmd_start("AT+NPSMR?");
-    _at.cmd_stop();
-    _at.resp_start("+NPSMR:");
-    if (_at.info_resp()) {
-        set_npsmr = _at.read_int();
-        _at.skip_param();
-    }
-    _at.resp_stop();
-    if(set_npsmr){
-        _at.cmd_start("AT+NPSMR=");
-        _at.write_int(0); 
-        _at.cmd_stop_read_resp();
-    }
-#endif
+nsapi_error_t UNISOC_RDA8908A_CellularStack::socket_stack_init()
+{
 
-#if 0
-    /* AT+CSTT Start Task And Set APN, User ID, Password */
-    _at.cmd_start("AT+CSTT=");
+    _at.lock();
+    tr_debug("UNISOC_RDA8908A_CellularStack:%s:%u: START ", __FUNCTION__, __LINE__);
+
+    _at.cmd_start("AT+CIPMUX=1");   // enable multi-ip connection
+    _at.cmd_stop_read_resp();
+
+    _at.cmd_start("AT+CIPSRIP=1");  // enable to show remote IP and Port while receive data
+    _at.cmd_stop_read_resp();
+
+    _at.cmd_start("AT+CIPRXGET=1"); // enable to get data from network manually
+    _at.cmd_stop_read_resp();
+
+    _at.cmd_start("AT+CSTT=");      // Start Task And Set APN, User ID, Password
     _at.write_string("snbiot");
     _at.write_string("");
     _at.write_string("");
     _at.cmd_stop_read_resp();
-#endif
 
-    /*AT+CIICR Bring Up Wireless Connection With GPRS*/
-    _at.cmd_start("AT+CIICR");
+    _at.cmd_start("AT+CIICR");       // AT+CIICR Bring Up Wireless Connection With GPRS
     _at.cmd_stop_read_resp();
-
-#if 1
-
-    /*AT+CIFSR Get Local IP Address*/
-    _at.cmd_start("AT+CIFSR");
-    _at.cmd_stop_read_resp();
-#endif
-
-
-    //////////////////////////////////////
-    //Show Remote IP Address And Port When Received Data
-    _at.cmd_start("AT+CIPSRIP?");
-    _at.cmd_stop();
-    _at.resp_start("+CIPSRIP:");
-    if (_at.info_resp()) {
-        set_showip = _at.read_int();
-    }
-    _at.resp_stop();
-    if(!set_showip){
-        _at.cmd_start("AT+CIPSRIP=");
-        _at.write_int(1); /* 0-Disable, 1-Enable */
-        _at.cmd_stop_read_resp();
-    }
-
-    //////////////////////////////////////
-    //Get Data From Network Manually
-    _at.cmd_start("AT+CIPRXGET?");
-    _at.cmd_stop();
-    _at.resp_start("+CIPRXGET:");
-    if (_at.info_resp()) {
-        set_rxmode = _at.read_int();
-    }
-    _at.resp_stop();
-    if(!set_rxmode){
-        _at.cmd_start("AT+CIPRXGET=");
-        _at.write_int(1); 
-        _at.cmd_stop_read_resp();
-    }
-
-    //////////////////////////////////////
-    //Signaling connection status
-    _at.cmd_start("AT+CSCON?");
-    _at.cmd_stop();
-    _at.resp_start("+CSCON:");
-    if (_at.info_resp()) {
-        set_cscon = _at.read_int();
-        _at.skip_param();
-    }
-    _at.resp_stop();
-    if(set_cscon){
-        _at.cmd_start("AT+CSCON=");
-        _at.write_int(0); 
-        _at.cmd_stop_read_resp();
-    }
 
     tr_debug("UNISOC_RDA8908A_CellularStack:%s:%u: END ", __FUNCTION__, __LINE__);
     return _at.unlock_return_error();
