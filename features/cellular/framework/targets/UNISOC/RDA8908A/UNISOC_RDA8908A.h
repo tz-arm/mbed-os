@@ -33,6 +33,8 @@ protected: // AT_CellularDevice
     virtual nsapi_error_t init();
 public: // NetworkInterface
     void handle_urc(FileHandle *fh);
+private:
+    void urc_cscon();
 };
 } // namespace mbed
 #endif // UNISOC_RDA8908A_H_

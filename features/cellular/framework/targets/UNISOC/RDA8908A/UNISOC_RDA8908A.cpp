@@ -36,12 +36,19 @@ static const intptr_t cellular_properties[AT_CellularBase::PROPERTY_MAX] = {
     AT_CellularNetwork::RegistrationModeDisable,    // C_GREG
     AT_CellularNetwork::RegistrationModeDisable,    // C_REG
     1,  // AT_CGSN_WITH_TYPE
-    1,  // AT_CGDATA
+    0,  // AT_CGDATA
     0,  // AT_CGAUTH
-    1,  // PROPERTY_IPV4_STACK
-    0,  // PROPERTY_IPV6_STACK
-    0,  // PROPERTY_IPV4V6_STACK
+    1,  // AT_CNMI
+    1,  // AT_CSMP
+    1,  // AT_CMGF
+    1,  // AT_CSDH   
+    1,  // PROPERTY_IPV4_PDP_TYPE
+    0,  // PROPERTY_IPV6_PDP_TYPE
+    0,  // PROPERTY_IPV4V6_PDP_TYPE
+    0,  // PROPERTY_NON_IP_PDP_TYPE
+    1,  // PROPERTY_AT_CGEREP
 };
+
 
 UNISOC_RDA8908A::UNISOC_RDA8908A(FileHandle *fh) : AT_CellularDevice(fh)
 {
@@ -63,6 +70,22 @@ AT_CellularInformation *UNISOC_RDA8908A::open_information_impl(ATHandler &at)
     return new UNISOC_RDA8908A_CellularInformation(at);
 }
 
+void UNISOC_RDA8908A::urc_cscon()
+{
+    int cscon_mode = 0;
+    int cscon_status = 0;
+    int cscon_access = 0;
+
+    _at->lock();
+    cscon_mode = _at->read_int();
+    if(cscon_mode){
+        cscon_status = _at->read_int();
+        cscon_access = _at->read_int();
+    }
+    _at->unlock();
+    tr_debug("UNISOC_RDA8908A_CellularStack::urc_cscon:%d,%d,%d",cscon_mode,cscon_status,cscon_access);  
+}
+
 nsapi_error_t UNISOC_RDA8908A::init()
 {
     tr_debug("UNISOC_RDA8908A:%s:%u: START ", __FUNCTION__, __LINE__);
@@ -72,27 +95,28 @@ nsapi_error_t UNISOC_RDA8908A::init()
     _at->cmd_start("AT");
     _at->cmd_stop_read_resp();
 
-    _at->cmd_start("ATE0");         // echo off
+    // echo off
+    _at->cmd_start("ATE0");
     _at->cmd_stop_read_resp();
 
-    _at->cmd_start("AT+CMEE=1");    // verbose responses
+    // verbose responses
+    _at->cmd_start("AT+CMEE=1");
     _at->cmd_stop_read_resp();
 
-    _at->cmd_start("AT+QNITZ=0");    // disable sync network time
+    // disable sync network time
+    _at->cmd_start("AT+QNITZ=0");
     _at->cmd_stop_read_resp();
 
-    _at->cmd_start("AT+CTZR=0");    // disable the time zone report
+    // disable the time zone report
+    _at->cmd_start("AT+CTZR=0");
     _at->cmd_stop_read_resp();
 
-    _at->cmd_start("AT+CFUN=1");    // set full functionality
+    // set full functionality
+    _at->cmd_start("AT+CFUN=1");
     _at->cmd_stop_read_resp();
 
-    _at->cmd_start("AT+CSCON=");     // set connection status reporting
-    if(_at->get_debug()){
-        _at->write_int(3); 
-    }else{
-        _at->write_int(0); 
-    }
+    // set connection status reporting
+    _at->cmd_start("AT+CSCON=0");
     _at->cmd_stop_read_resp();
 
     return _at->unlock_return_error();

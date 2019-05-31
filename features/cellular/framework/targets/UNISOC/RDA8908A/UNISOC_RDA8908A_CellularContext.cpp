@@ -62,9 +62,8 @@ nsapi_error_t UNISOC_RDA8908A_CellularContext::do_user_authentication()
         _at.write_string(_uname);
         _at.write_string(_pwd);
     }
-    _at.cmd_stop();
-    _at.resp_start();
-    _at.resp_stop();
+    _at.cmd_stop_read_resp();
+
     if (_at.get_last_error() != NSAPI_ERROR_OK) {
         return NSAPI_ERROR_AUTH_FAILURE;
     }
