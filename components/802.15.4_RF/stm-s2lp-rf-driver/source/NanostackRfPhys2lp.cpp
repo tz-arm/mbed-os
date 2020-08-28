@@ -31,6 +31,11 @@
 #include "mbed_wait_api.h"
 #include "platform/mbed_error.h"
 
+#if MBED_CONF_S2LP_MAC_STATIC
+#include "KVStore.h"
+#include "kvstore_global_api.h"
+#endif
+
 using namespace mbed;
 using namespace rtos;
 
@@ -1284,12 +1289,39 @@ int8_t NanostackRfPhys2lp::rf_register()
             rf_unlock();
             return -1;
         }
+#elif MBED_CONF_S2LP_MAC_STATIC
+        kv_info_t info;
+        size_t actual_size = 0;
+        int res = MBED_ERROR_NOT_READY;
+        res = kv_get_info("/kv/mac", &info);
+        if((res!=MBED_SUCCESS)||(info.size!=8))
+        {
+            randLIB_seed_random();
+            randLIB_get_n_bytes_random(s2lp_MAC, 8);
+            s2lp_MAC[0] |= 2; //Set Local Bit
+            s2lp_MAC[0] &= ~1; //Clear multicast bit
+
+            res = kv_set("/kv/mac", s2lp_MAC, 8, 0);
+            if(res!=MBED_SUCCESS)
+            {
+                error("rf_register(): KVStore set fail for static MAC address.");
+                return -1;
+            }
+        }
+
+        res = kv_get("/kv/mac", s2lp_MAC, 8, &actual_size);
+        if((res!=MBED_SUCCESS)||(actual_size!=8))
+        {
+            error("rf_register(): KVStore get fail for static MAC address.");
+            return -1;
+        }
 #else
         randLIB_seed_random();
         randLIB_get_n_bytes_random(s2lp_MAC, 8);
         s2lp_MAC[0] |= 2; //Set Local Bit
         s2lp_MAC[0] &= ~1; //Clear multicast bit
 #endif
+        tr_info("RF MAC address: %s", trace_array(s2lp_MAC, 8));
         set_mac_address(s2lp_MAC);
     }
 

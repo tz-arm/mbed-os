@@ -65,6 +65,10 @@
             "help": "I2C_SCL pin for I2C SCL, null assumed, needs to be set/overwritten otherwise",
             "value": null
         },
+        "mac-static": {
+            "help": "Enable static MAC address via kvstore. [true/false]",
+            "value": true
+        },
         "provide-default": {
             "help": "Provide default NanostackRfpy. [true/false]",
             "value": false
